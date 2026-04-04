@@ -1,0 +1,9 @@
+# Godot 4+
+.godot/
+
+# Python
+__pycache__/
+*.py[cod]
+.Python
+venv/
+.venv/
