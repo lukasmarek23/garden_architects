@@ -5,6 +5,7 @@ extends PanelContainer
 var plant_id: String = ""
 var deck: PlantDeck
 var base_seeds_getter: Callable = Callable()
+var base_water_getter: Callable = Callable()
 
 var _icon: TextureRect
 var _label: Label
@@ -29,12 +30,20 @@ func _ready() -> void:
 func refresh_visual() -> void:
 	var def := PlantCatalog.get_definition(plant_id)
 	var left := deck.remaining(plant_id) if deck != null else 0
-	var need := def.seeds_to_plant if def != null else 0
+	var need_s := def.seeds_to_plant if def != null else 0
+	var need_w := def.water_to_mature if def != null else 0
 	var seeds := 0
+	var water := 0
 	if base_seeds_getter.is_valid():
 		seeds = int(base_seeds_getter.call())
-	var name := def.display_name if def != null else plant_id
-	_label.text = "%s  ×%d  (needs %d seeds · you have %d)" % [name, left, need, seeds]
+	if base_water_getter.is_valid():
+		water = int(base_water_getter.call())
+	var pname := def.display_name if def != null else plant_id
+	var affordable := seeds >= need_s and water >= need_w
+	var cost_str := "%d seeds  %d water" % [need_s, need_w]
+	var have_str := "you have %d/%d" % [seeds, water]
+	_label.text = "%s  ×%d  (%s · %s)" % [pname, left, cost_str, have_str]
+	modulate = Color(1, 1, 1, 1) if affordable else Color(1, 0.45, 0.45, 0.8)
 	if def != null and def.icon != null:
 		_icon.texture = def.icon
 	else:
@@ -51,9 +60,12 @@ func _get_drag_data(_at_position: Vector2) -> Variant:
 	if def == null:
 		return null
 	var seeds := 0
+	var water := 0
 	if base_seeds_getter.is_valid():
 		seeds = int(base_seeds_getter.call())
-	if seeds < def.seeds_to_plant:
+	if base_water_getter.is_valid():
+		water = int(base_water_getter.call())
+	if seeds < def.seeds_to_plant or water < def.water_to_mature:
 		return null
 	var preview := TextureRect.new()
 	preview.custom_minimum_size = Vector2(48, 48)

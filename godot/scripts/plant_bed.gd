@@ -30,33 +30,32 @@ func occupancy_at(col: int, row: int) -> int:
 	return _occupancy[cell_index(col, row)]
 
 
-## Absolute cells (col, row) covered if anchored at `anchor_col`, `anchor_row`.
-func footprint_cells(plant_id: String, anchor_col: int, anchor_row: int) -> Array[Vector2i]:
+## Absolute cells (col, row) covered if anchored at `anchor_col`, `anchor_row` with `rotation` (0–3 CW).
+func footprint_cells(plant_id: String, anchor_col: int, anchor_row: int, rotation: int = 0) -> Array[Vector2i]:
 	var def := PlantCatalog.get_definition(plant_id)
 	var out: Array[Vector2i] = []
 	if def == null:
 		return out
-	for off in def.shape_offsets:
+	var offsets := PlantDefinition.rotate_shape(def.shape_offsets, rotation)
+	for off in offsets:
 		out.append(Vector2i(anchor_col + off.x, anchor_row + off.y))
 	return out
 
 
-func can_place(plant_id: String, anchor_col: int, anchor_row: int) -> bool:
+func can_place(plant_id: String, anchor_col: int, anchor_row: int, rotation: int = 0) -> bool:
 	var def := PlantCatalog.get_definition(plant_id)
 	if def == null:
 		return false
-	for off in def.shape_offsets:
-		var c := anchor_col + off.x
-		var r := anchor_row + off.y
-		if not _in_bounds(c, r):
+	for cell in footprint_cells(plant_id, anchor_col, anchor_row, rotation):
+		if not _in_bounds(cell.x, cell.y):
 			return false
-		if _occupancy[cell_index(c, r)] >= 0:
+		if _occupancy[cell_index(cell.x, cell.y)] >= 0:
 			return false
 	return true
 
 
-func commit_place(plant_id: String, anchor_col: int, anchor_row: int) -> bool:
-	if not can_place(plant_id, anchor_col, anchor_row):
+func commit_place(plant_id: String, anchor_col: int, anchor_row: int, rotation: int = 0) -> bool:
+	if not can_place(plant_id, anchor_col, anchor_row, rotation):
 		return false
 	var idx := _placements.size()
 	_placements.append(
@@ -64,10 +63,11 @@ func commit_place(plant_id: String, anchor_col: int, anchor_row: int) -> bool:
 			"plant_id": plant_id,
 			"anchor_col": anchor_col,
 			"anchor_row": anchor_row,
+			"rotation": rotation,
 			"water_applied": 0,
 		}
 	)
-	for cell in footprint_cells(plant_id, anchor_col, anchor_row):
+	for cell in footprint_cells(plant_id, anchor_col, anchor_row, rotation):
 		_occupancy[cell_index(cell.x, cell.y)] = idx
 	return true
 

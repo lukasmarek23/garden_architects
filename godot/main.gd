@@ -292,33 +292,51 @@ func _refresh_plant_hud() -> void:
 		_hud_bed_p2.refresh()
 
 
-func _try_place_plant(player: BoardData.Player, plant_id: String, col: int, row: int) -> bool:
+func _base_water_for(player: BoardData.Player) -> int:
+	return _base_water_p1 if player == BoardData.Player.P1 else _base_water_p2
+
+
+func _spend_base_water(player: BoardData.Player, amount: int) -> void:
+	if amount <= 0:
+		return
+	if player == BoardData.Player.P1:
+		_base_water_p1 = maxi(0, _base_water_p1 - amount)
+	else:
+		_base_water_p2 = maxi(0, _base_water_p2 - amount)
+
+
+func _try_place_plant(player: BoardData.Player, plant_id: String, col: int, row: int, rotation: int = 0) -> bool:
 	var def := PlantCatalog.get_definition(plant_id)
 	if def == null:
 		return false
 	var bed := _bed_for(player)
-	if not bed.can_place(plant_id, col, row):
+	if not bed.can_place(plant_id, col, row, rotation):
 		return false
 	if _base_seeds_for(player) < def.seeds_to_plant:
+		return false
+	if _base_water_for(player) < def.water_to_mature:
 		return false
 	var deck := _deck_for(player)
 	if not deck.take(plant_id):
 		return false
-	if not bed.commit_place(plant_id, col, row):
+	if not bed.commit_place(plant_id, col, row, rotation):
 		deck.undo_take(plant_id)
 		return false
 	_spend_base_seeds(player, def.seeds_to_plant)
+	_spend_base_water(player, def.water_to_mature)
 	_update_resource_readout()
 	_refresh_plant_hud()
 	return true
 
 
 func _open_planting_modal(player: BoardData.Player) -> void:
-	var try_place := func(pid: String, c: int, r: int) -> bool:
-		return _try_place_plant(player, pid, c, r)
+	var try_place := func(pid: String, c: int, r: int, rot: int) -> bool:
+		return _try_place_plant(player, pid, c, r, rot)
 	var seeds_fn := func() -> int:
 		return _base_seeds_for(player)
-	_planting_modal.open(player, _bed_for(player), _deck_for(player), try_place, seeds_fn)
+	var water_fn := func() -> int:
+		return _base_water_for(player)
+	_planting_modal.open(player, _bed_for(player), _deck_for(player), try_place, seeds_fn, water_fn)
 
 
 func _on_planting_modal_finished() -> void:

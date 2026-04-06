@@ -15,6 +15,29 @@ var interactive: bool = false:
 		mouse_filter = Control.MOUSE_FILTER_STOP if v else Control.MOUSE_FILTER_IGNORE
 
 var _plants_layer: Control
+## Ghost preview state (set by PlantingModal during bed-phase keyboard nav).
+var ghost_plant_id: String = ""
+var ghost_rotation: int = 0
+var ghost_col: int = 0
+var ghost_row: int = 0
+var ghost_active: bool = false:
+	set(v):
+		ghost_active = v
+		queue_redraw()
+
+
+func set_ghost(plant_id: String, col: int, row: int, rotation: int) -> void:
+	ghost_plant_id = plant_id
+	ghost_col = col
+	ghost_row = row
+	ghost_rotation = rotation
+	ghost_active = true
+	queue_redraw()
+
+
+func clear_ghost() -> void:
+	ghost_active = false
+	queue_redraw()
 
 
 func _ready() -> void:
@@ -59,6 +82,17 @@ func _draw() -> void:
 		for r in PlantBed.ROWS:
 			var rect := Rect2(Vector2(c * sz, r * sz), Vector2(sz, sz))
 			draw_rect(rect, grid_line_color, false, grid_line_width)
+	if ghost_active and not ghost_plant_id.is_empty() and bed != null:
+		var cells := bed.footprint_cells(ghost_plant_id, ghost_col, ghost_row, ghost_rotation)
+		var valid := bed.can_place(ghost_plant_id, ghost_col, ghost_row, ghost_rotation)
+		var fill := Color(0.2, 0.9, 0.3, 0.45) if valid else Color(0.9, 0.2, 0.2, 0.45)
+		var border := Color(0.2, 0.9, 0.3, 0.9) if valid else Color(0.9, 0.2, 0.2, 0.9)
+		for cell in cells:
+			if cell.x < 0 or cell.y < 0 or cell.x >= PlantBed.COLS or cell.y >= PlantBed.ROWS:
+				continue
+			var r2 := Rect2(Vector2(cell.x * sz, cell.y * sz), Vector2(sz, sz))
+			draw_rect(r2, fill, true)
+			draw_rect(r2, border, false, 2.5)
 
 
 func refresh() -> void:
@@ -75,7 +109,8 @@ func refresh() -> void:
 		var pid: String = str(pl.get("plant_id", ""))
 		var ac := int(pl.get("anchor_col", 0))
 		var ar := int(pl.get("anchor_row", 0))
-		var cells := bed.footprint_cells(pid, ac, ar)
+		var rot := int(pl.get("rotation", 0))
+		var cells := bed.footprint_cells(pid, ac, ar, rot)
 		if cells.is_empty():
 			continue
 		var min_c := 99
