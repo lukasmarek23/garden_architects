@@ -15,8 +15,12 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="The Garden Architects"
-run/main_scene="res://main.tscn"
+run/main_scene="res://menu.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
+
+[autoload]
+
+GameState="*uid://kbklc54bhka4"
 
 [display]
 

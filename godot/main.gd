@@ -30,6 +30,10 @@ const CARRY_WATER := 1
 ## and every droplet has been delivered to bases (see `_deposit_hand_to_base`).
 @export var starting_seed_pool: int = 20
 @export var starting_water_pool: int = 20
+## Optional repeating texture applied to the top (highlight) strip of each path edge.
+## Assign a dirt/gravel strip image (any size; it tiles along the line length).
+## Leave empty to use the default lighter-shade highlight strip.
+@export var path_line_texture: Texture2D
 @onready var _board: Sprite2D = $Board3
 @onready var _highlights_root: Node2D = $Board3/MoveHighlights
 @onready var _pawn_p1: PawnMarker = $Board3/PawnP1
@@ -77,6 +81,9 @@ var _plant_ui_layer: CanvasLayer
 var _planting_modal: PlantingModal
 var _deposited_this_move: bool = false
 var _planting_flow_active: bool = false
+var _pause_layer: CanvasLayer
+var _pause_first_button: Button
+var _paused: bool = false
 
 
 func _ready() -> void:
@@ -98,7 +105,13 @@ func _ready() -> void:
 	else:
 		push_warning("PathGenerator failed — using hardcoded playtest layout.")
 
-	# Step 3: move pawns to (possibly new) generated base positions and record them.
+	# Step 3: apply chosen character colours to pawns.
+	_pawn_p1.color       = GameState.p1_color
+	_pawn_p1.pawn_color  = GameState.p1_color
+	_pawn_p2.color       = GameState.p2_color
+	_pawn_p2.pawn_color  = GameState.p2_color
+
+	# Step 4: move pawns to (possibly new) generated base positions and record them.
 	var tex_size_r := _board.texture.get_size()
 	var nudge := cell_position_nudge
 	_pawn_p1.position = BoardLayout.cell_center_local(BoardData.BASE_P1, tex_size_r) + nudge
@@ -130,6 +143,7 @@ func _ready() -> void:
 	_update_turn_label()
 	_update_resource_readout()
 	_refresh_move_highlights()
+	_build_pause_overlay()
 
 
 func _apply_layout_calibration_from_pawns() -> void:
@@ -164,6 +178,71 @@ func _apply_layout_calibration_from_pawns() -> void:
 		)
 
 
+# ── Pause / in-game menu ────────────────────────────────────────────────────
+
+func _build_pause_overlay() -> void:
+	_pause_layer = CanvasLayer.new()
+	_pause_layer.layer = 20
+	_pause_layer.visible = false
+	# All children must keep processing while the tree is paused.
+	_pause_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(_pause_layer)
+
+	var dim := ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.0, 0.0, 0.0, 0.62)
+	dim.process_mode = Node.PROCESS_MODE_ALWAYS
+	_pause_layer.add_child(dim)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(300, 0)
+	panel.process_mode = Node.PROCESS_MODE_ALWAYS
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.07, 0.10, 0.07, 0.97)
+	style.set_corner_radius_all(10)
+	panel.add_theme_stylebox_override("panel", style)
+	_pause_layer.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 14)
+	panel.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "Paused"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color(0.85, 0.78, 0.45))
+	vbox.add_child(title)
+
+	_pause_first_button = _add_pause_button(vbox, "Resume",       func(): _toggle_pause())
+	_add_pause_button(vbox, "Quit to Menu", func(): _quit_to_menu())
+
+
+func _add_pause_button(parent: Control, label: String, cb: Callable) -> Button:
+	var btn := Button.new()
+	btn.text = label
+	btn.custom_minimum_size = Vector2(280, 50)
+	btn.add_theme_font_size_override("font_size", 19)
+	btn.process_mode = Node.PROCESS_MODE_ALWAYS
+	btn.pressed.connect(cb)
+	parent.add_child(btn)
+	return btn
+
+
+func _toggle_pause() -> void:
+	_paused = not _paused
+	_pause_layer.visible = _paused
+	get_tree().paused = _paused
+	if _paused and _pause_first_button != null:
+		_pause_first_button.grab_focus()
+
+
+func _quit_to_menu() -> void:
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://menu.tscn")
+
+
 # ── Path visuals ─────────────────────────────────────────────────────────────
 
 func _draw_path_visuals(layout: GeneratedLayout) -> void:
@@ -171,37 +250,101 @@ func _draw_path_visuals(layout: GeneratedLayout) -> void:
 		child.queue_free()
 
 	var tex_size := _board.texture.get_size()
+	var line_w   := cell_px.x * 0.22   # thick coloured base
+	var top_w    := cell_px.x * 0.125  # thin highlight / texture strip on top
+	var offset_d := cell_px.x * 0.12   # perpendicular shift on shared edges
+
+	var p1_edges := _build_edge_set(layout.p1_neighbors)
+	var p2_edges := _build_edge_set(layout.p2_neighbors)
+
+	var c1 := GameState.p1_color
+	var c2 := GameState.p2_color
+
+	# P1 edges — always offset +perp so the line is consistently to one side.
+	for key in p1_edges.keys():
+		var e: Array = p1_edges[key]
+		_add_line2d(
+			BoardLayout.cell_center_local(e[0], tex_size) + cell_position_nudge + _perp_offset(e[0], e[1], tex_size, offset_d),
+			BoardLayout.cell_center_local(e[1], tex_size) + cell_position_nudge + _perp_offset(e[0], e[1], tex_size, offset_d),
+			Color(c1.r, c1.g, c1.b, 0.90), top_w, null)
+
+	# P2 edges — always offset -perp (opposite side).
+	for key in p2_edges.keys():
+		var e: Array = p2_edges[key]
+		_add_line2d(
+			BoardLayout.cell_center_local(e[0], tex_size) + cell_position_nudge + _perp_offset(e[0], e[1], tex_size, -offset_d),
+			BoardLayout.cell_center_local(e[1], tex_size) + cell_position_nudge + _perp_offset(e[0], e[1], tex_size, -offset_d),
+			Color(c2.r, c2.g, c2.b, 0.90), top_w, null)
+
+	# Base markers — coloured square backing + shared sprite on top.
 	var cell_sz := cell_px.x * 0.80
+	_add_cell_square(layout.p1_base, Color(c1.r, c1.g, c1.b, 0.85), cell_sz, tex_size)
+	_add_cell_square(layout.p2_base, Color(c2.r, c2.g, c2.b, 0.85), cell_sz, tex_size)
+	_add_cell_sprite(layout.p1_base, "res://art/player_base.png", cell_sz * 2.0, tex_size)
+	_add_cell_sprite(layout.p2_base, "res://art/player_base.png", cell_sz * 2.0, tex_size)
 
-	var p1_set: Dictionary = {}
-	for c in layout.p1_cells:
-		p1_set[c] = true
-	var p2_set: Dictionary = {}
-	for c in layout.p2_cells:
-		p2_set[c] = true
+	# Special cell backing squares + sprites.
+	_add_cell_square(layout.well,     Color(0.18, 0.64, 0.88, 0.55), cell_sz * 1.05, tex_size)
+	_add_cell_square(layout.seed_box, Color(0.30, 0.76, 0.24, 0.55), cell_sz * 1.05, tex_size)
+	_add_cell_sprite(layout.well,     "res://art/well.png",     cell_sz * 1.5, tex_size)
+	_add_cell_sprite(layout.seed_box, "res://art/seed_box.png", cell_sz * 1.5, tex_size)
 
-	# P1 path (crossing cells drawn in purple, P1-only in orange).
-	for c in layout.p1_cells:
-		if c == layout.p1_base:
-			continue
-		var col := Color(0.65, 0.22, 0.72, 0.42) if p2_set.has(c) else Color(0.85, 0.45, 0.12, 0.32)
-		_add_path_cell_visual(c, col, cell_sz, tex_size)
 
-	# P2-only path cells (blue; crossings already drawn above).
-	for c in layout.p2_cells:
-		if c == layout.p2_base or p1_set.has(c):
-			continue
-		_add_path_cell_visual(c, Color(0.25, 0.52, 0.95, 0.32), cell_sz, tex_size)
+## Returns a dict keyed by canonical edge string "cellA|cellB" (alphabetically sorted).
+## Values are [cellA, cellB] arrays.
+func _build_edge_set(adj: Dictionary) -> Dictionary:
+	var edges: Dictionary = {}
+	for cv in adj.keys():
+		var c := str(cv)
+		for nv in adj.get(c, []):
+			var n := str(nv)
+			var key := (c + "|" + n) if c < n else (n + "|" + c)
+			if not edges.has(key):
+				edges[key] = [c, n] if c < n else [n, c]
+	return edges
 
-	# Bases (solid, larger marker behind the pawn).
-	_add_path_cell_visual(layout.p1_base, Color(0.85, 0.45, 0.12, 0.72), cell_sz, tex_size)
-	_add_path_cell_visual(layout.p2_base, Color(0.25, 0.52, 0.95, 0.72), cell_sz, tex_size)
 
-	# Special cells: coloured backing square + sprite on top.
-	_add_path_cell_visual(layout.well, Color(0.18, 0.64, 0.88, 0.55), cell_sz * 1.05, tex_size)
-	_add_path_cell_visual(layout.seed_box, Color(0.30, 0.76, 0.24, 0.55), cell_sz * 1.05, tex_size)
-	_add_cell_sprite(layout.well, "res://art/well.png", cell_sz, tex_size)
-	_add_cell_sprite(layout.seed_box, "res://art/seed_box.png", cell_sz, tex_size)
+## Draws one path edge as two overlaid Line2D nodes (thick coloured base + thin top strip).
+## `perp_offset` shifts both endpoints perpendicular to the edge direction (for shared edges).
+func _draw_path_edge(
+	a: String, b: String,
+	bottom_color: Color, top_color: Color,
+	bottom_width: float, top_width: float,
+	perp_offset: float, tex_size: Vector2
+) -> void:
+	var ca := BoardLayout.cell_center_local(a, tex_size) + cell_position_nudge
+	var cb := BoardLayout.cell_center_local(b, tex_size) + cell_position_nudge
+
+	if perp_offset != 0.0:
+		var perp := (cb - ca).normalized().rotated(PI * 0.5) * perp_offset
+		ca += perp
+		cb += perp
+
+	_add_line2d(ca, cb, bottom_color, bottom_width, null)
+	_add_line2d(ca, cb, top_color,    top_width,    path_line_texture)
+
+
+func _perp_offset(a: String, b: String, tex_size: Vector2, amount: float) -> Vector2:
+	var ca := BoardLayout.cell_center_local(a, tex_size)
+	var cb := BoardLayout.cell_center_local(b, tex_size)
+	return (cb - ca).normalized().rotated(PI * 0.5) * amount
+
+
+func _add_line2d(
+	a: Vector2, b: Vector2, color: Color, width: float, tex: Texture2D
+) -> void:
+	var line := Line2D.new()
+	line.add_point(a)
+	line.add_point(b)
+	line.width = width
+	line.default_color = color
+	line.joint_mode = Line2D.LINE_JOINT_ROUND
+	line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	line.end_cap_mode   = Line2D.LINE_CAP_ROUND
+	if tex != null:
+		line.texture = tex
+		line.texture_mode = Line2D.LINE_TEXTURE_TILE
+	_path_visuals_root.add_child(line)
 
 
 func _add_cell_sprite(cell: String, texture_path: String, cell_display_px: float, tex_size: Vector2) -> void:
@@ -212,13 +355,12 @@ func _add_cell_sprite(cell: String, texture_path: String, cell_display_px: float
 	var sprite := Sprite2D.new()
 	sprite.texture = tex
 	sprite.position = BoardLayout.cell_center_local(cell, tex_size) + cell_position_nudge
-	# Scale so the sprite fills ~85 % of the cell regardless of its source resolution.
 	var src_px := float(maxi(tex.get_width(), tex.get_height()))
 	sprite.scale = Vector2.ONE * (cell_display_px * 0.85 / src_px)
 	_path_visuals_root.add_child(sprite)
 
 
-func _add_path_cell_visual(cell: String, color: Color, size: float, tex_size: Vector2) -> void:
+func _add_cell_square(cell: String, color: Color, size: float, tex_size: Vector2) -> void:
 	var pos := BoardLayout.cell_center_local(cell, tex_size) + cell_position_nudge
 	var poly := Polygon2D.new()
 	var s := size * 0.5
@@ -258,6 +400,14 @@ func _input(event: InputEvent) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var ek2 := event as InputEventKey
+		if ek2.pressed and not ek2.echo and ek2.physical_keycode == KEY_ESCAPE:
+			_toggle_pause()
+			get_viewport().set_input_as_handled()
+			return
+	if _paused:
+		return
 	if _game_over:
 		return
 	if _planting_flow_active:
@@ -474,8 +624,8 @@ func _cell_is_own_base(player: BoardData.Player, cell: String) -> bool:
 
 func _player_score(player: BoardData.Player) -> int:
 	if player == BoardData.Player.P1:
-		return _base_seeds_p1 + _base_water_p1
-	return _base_seeds_p2 + _base_water_p2
+		return _base_seeds_p1 + _base_water_p1 + _bed_p1.total_vp()
+	return _base_seeds_p2 + _base_water_p2 + _bed_p2.total_vp()
 
 
 func _trigger_game_over() -> void:
@@ -575,12 +725,12 @@ func _update_resource_readout() -> void:
 			_base_seeds_p1,
 			_base_water_p1,
 			_bed_p1.format_compact(),
-			_bed_p1.total_bloomed_vp(),
+			_bed_p1.total_vp(),
 			_format_hand(_hand_p2),
 			_base_seeds_p2,
 			_base_water_p2,
 			_bed_p2.format_compact(),
-			_bed_p2.total_bloomed_vp(),
+			_bed_p2.total_vp(),
 		]
 	)
 
