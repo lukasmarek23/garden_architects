@@ -11,10 +11,11 @@ extends RefCounted
 
 enum Player { P1, P2 }
 
-const BASE_P1 := "A5"
-const BASE_P2 := "G5"
-const SEED_BOX := "B1"
-const WELL := "F1"
+## Mutable so PathGenerator can replace them before game state initialises.
+static var BASE_P1: String = "A5"
+static var BASE_P2: String = "G5"
+static var SEED_BOX: String = "B1"
+static var WELL: String = "F1"
 
 ## All 5×5 interior squares (for iteration, highlights, validation helpers).
 const BOARD_CELLS: Array[String] = [
@@ -27,9 +28,9 @@ const BOARD_CELLS: Array[String] = [
 
 ## Keys: any cell where this player’s pawn may stand (usually BOARD_CELLS + that player’s base).
 ## Values: Array of cell IDs reachable in **one step** along **this player’s** colored path.
-## Only list neighbors that match the physical track on the board (not full 4-way grid unless you intend that).
+## Replaced at runtime by PathGenerator; defaults are the hand-authored playtest layout.
 ## P1: A5↔seed (via C1 or B2 branches), A5↔well (via D1–E1 or D3–F3–F2).
-const PATH_NEIGHBORS_P1: Dictionary = {
+static var PATH_NEIGHBORS_P1: Dictionary = {
 	"A5": ["B5"],
 	"B1": ["B2", "C1"],
 	"B2": ["B1", "C2"],
@@ -49,7 +50,7 @@ const PATH_NEIGHBORS_P1: Dictionary = {
 }
 
 ## P2: G5↔seed (via B2–B1 or D2–D1–C1), G5↔well (via E1 or F2); E2↔D2.
-const PATH_NEIGHBORS_P2: Dictionary = {
+static var PATH_NEIGHBORS_P2: Dictionary = {
 	"B1": ["B2", "C1"],
 	"B2": ["B1", "C2"],
 	"C1": ["B1", "D1"],
@@ -69,6 +70,17 @@ const PATH_NEIGHBORS_P2: Dictionary = {
 	"F5": ["F4", "G5"],
 	"G5": ["F5"],
 }
+
+
+## Replace all runtime-mutable fields from a generated layout.
+## Call this before any game-state initialisation in main.gd._ready().
+static func apply_layout(layout: GeneratedLayout) -> void:
+	BASE_P1 = layout.p1_base
+	BASE_P2 = layout.p2_base
+	SEED_BOX = layout.seed_box
+	WELL = layout.well
+	PATH_NEIGHBORS_P1 = layout.p1_neighbors
+	PATH_NEIGHBORS_P2 = layout.p2_neighbors
 
 
 static func path_neighbors(player: Player) -> Dictionary:

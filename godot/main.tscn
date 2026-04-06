@@ -1,9 +1,10 @@
 [gd_scene format=3 uid="uid://btxv5n542hp68"]
 
 [ext_resource type="Script" uid="uid://bisbqd40kr0t7" path="res://main.gd" id="1_main"]
-[ext_resource type="Texture2D" uid="uid://dpvltwh0urlwi" path="res://art/board3.png" id="2_0xm2m"]
+[ext_resource type="Texture2D" uid="uid://dvux8vohcj2vc" path="res://art/board_clean.png" id="2_1bvp3"]
 [ext_resource type="Script" uid="uid://dbujw88yo48f6" path="res://scripts/pawn_marker.gd" id="3_pawn"]
 [ext_resource type="Script" uid="uid://eajxu7hib3av" path="res://scripts/plant_bed_view.gd" id="4_bedview"]
+[ext_resource type="AudioStream" path="res://audio/in_game_theme.mp3" id="5_music"]
 
 [node name="Main" type="Node2D" unique_id=67007375]
 script = ExtResource("1_main")
@@ -12,7 +13,9 @@ script = ExtResource("1_main")
 
 [node name="Board3" type="Sprite2D" parent="." unique_id=800413446]
 scale = Vector2(0.6994012, 0.7001953)
-texture = ExtResource("2_0xm2m")
+texture = ExtResource("2_1bvp3")
+
+[node name="PathVisuals" type="Node2D" parent="Board3" unique_id=111111111]
 
 [node name="MoveHighlights" type="Node2D" parent="Board3" unique_id=635499313]
 
@@ -142,3 +145,8 @@ grow_vertical = 2
 theme_override_font_sizes/font_size = 22
 horizontal_alignment = 1
 autowrap_mode = 3
+
+[node name="Music" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("5_music")
+autoplay = true
+volume_db = -6.0

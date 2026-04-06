@@ -43,6 +43,7 @@ const CARRY_WATER := 1
 @onready var _bump_layer: CanvasLayer = $BumpLayer
 @onready var _bump_main_label: Label = $BumpLayer/OverlayRoot/MainLabel
 @onready var _bump_hint_label: Label = $BumpLayer/OverlayRoot/HintLabel
+@onready var _path_visuals_root: Node2D = $Board3/PathVisuals
 
 var _active: BoardData.Player = BoardData.Player.P1
 var _cell_p1: String = BoardData.BASE_P1
@@ -80,17 +81,28 @@ var _planting_flow_active: bool = false
 
 func _ready() -> void:
 	print("The Garden Architects — Godot project loaded.")
+	# Step 1: calibrate grid math from scene-placed pawns (they sit at A5/G5 in the scene).
 	if derive_grid_from_starting_pawns:
 		_apply_layout_calibration_from_pawns()
 	BoardLayout.origin_b1_top_left = origin_b1_top_left
 	BoardLayout.cell_px = cell_px
 	BoardLayout.row_1_at_bottom = row_1_at_bottom
 
-	if apply_layout_positions_to_pawns:
-		var tex_size_ap := _board.texture.get_size()
-		var n_ap := cell_position_nudge
-		_pawn_p1.position = BoardLayout.cell_center_local(BoardData.BASE_P1, tex_size_ap) + n_ap
-		_pawn_p2.position = BoardLayout.cell_center_local(BoardData.BASE_P2, tex_size_ap) + n_ap
+	# Step 2: generate board layout and apply to BoardData before any game state is read.
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var layout := PathGenerator.generate(rng)
+	if layout != null:
+		BoardData.apply_layout(layout)
+		_draw_path_visuals(layout)
+	else:
+		push_warning("PathGenerator failed — using hardcoded playtest layout.")
+
+	# Step 3: move pawns to (possibly new) generated base positions and record them.
+	var tex_size_r := _board.texture.get_size()
+	var nudge := cell_position_nudge
+	_pawn_p1.position = BoardLayout.cell_center_local(BoardData.BASE_P1, tex_size_r) + nudge
+	_pawn_p2.position = BoardLayout.cell_center_local(BoardData.BASE_P2, tex_size_r) + nudge
 
 	_end_turn_button.pressed.connect(_on_end_turn_pressed)
 	_home_local_p1 = _pawn_p1.position
@@ -107,6 +119,9 @@ func _ready() -> void:
 	_planting_modal = PlantingModal.new()
 	_planting_modal.finished.connect(_on_planting_modal_finished)
 	_plant_ui_layer.add_child(_planting_modal)
+	# Re-sync cell positions in case the generator changed the bases.
+	_cell_p1 = BoardData.BASE_P1
+	_cell_p2 = BoardData.BASE_P2
 	_hud_bed_p1.bed = _bed_p1
 	_hud_bed_p1.interactive = false
 	_hud_bed_p2.bed = _bed_p2
@@ -147,6 +162,72 @@ func _apply_layout_calibration_from_pawns() -> void:
 			"Board calibration: P1/P2 Y differs by %.1f px — bases may not share row 5; try toggling `row_1_at_bottom`."
 			% dy
 		)
+
+
+# ── Path visuals ─────────────────────────────────────────────────────────────
+
+func _draw_path_visuals(layout: GeneratedLayout) -> void:
+	for child in _path_visuals_root.get_children():
+		child.queue_free()
+
+	var tex_size := _board.texture.get_size()
+	var cell_sz := cell_px.x * 0.80
+
+	var p1_set: Dictionary = {}
+	for c in layout.p1_cells:
+		p1_set[c] = true
+	var p2_set: Dictionary = {}
+	for c in layout.p2_cells:
+		p2_set[c] = true
+
+	# P1 path (crossing cells drawn in purple, P1-only in orange).
+	for c in layout.p1_cells:
+		if c == layout.p1_base:
+			continue
+		var col := Color(0.65, 0.22, 0.72, 0.42) if p2_set.has(c) else Color(0.85, 0.45, 0.12, 0.32)
+		_add_path_cell_visual(c, col, cell_sz, tex_size)
+
+	# P2-only path cells (blue; crossings already drawn above).
+	for c in layout.p2_cells:
+		if c == layout.p2_base or p1_set.has(c):
+			continue
+		_add_path_cell_visual(c, Color(0.25, 0.52, 0.95, 0.32), cell_sz, tex_size)
+
+	# Bases (solid, larger marker behind the pawn).
+	_add_path_cell_visual(layout.p1_base, Color(0.85, 0.45, 0.12, 0.72), cell_sz, tex_size)
+	_add_path_cell_visual(layout.p2_base, Color(0.25, 0.52, 0.95, 0.72), cell_sz, tex_size)
+
+	# Special cells: coloured backing square + sprite on top.
+	_add_path_cell_visual(layout.well, Color(0.18, 0.64, 0.88, 0.55), cell_sz * 1.05, tex_size)
+	_add_path_cell_visual(layout.seed_box, Color(0.30, 0.76, 0.24, 0.55), cell_sz * 1.05, tex_size)
+	_add_cell_sprite(layout.well, "res://art/well.png", cell_sz, tex_size)
+	_add_cell_sprite(layout.seed_box, "res://art/seed_box.png", cell_sz, tex_size)
+
+
+func _add_cell_sprite(cell: String, texture_path: String, cell_display_px: float, tex_size: Vector2) -> void:
+	var tex := load(texture_path) as Texture2D
+	if tex == null:
+		push_warning("_add_cell_sprite: could not load " + texture_path)
+		return
+	var sprite := Sprite2D.new()
+	sprite.texture = tex
+	sprite.position = BoardLayout.cell_center_local(cell, tex_size) + cell_position_nudge
+	# Scale so the sprite fills ~85 % of the cell regardless of its source resolution.
+	var src_px := float(maxi(tex.get_width(), tex.get_height()))
+	sprite.scale = Vector2.ONE * (cell_display_px * 0.85 / src_px)
+	_path_visuals_root.add_child(sprite)
+
+
+func _add_path_cell_visual(cell: String, color: Color, size: float, tex_size: Vector2) -> void:
+	var pos := BoardLayout.cell_center_local(cell, tex_size) + cell_position_nudge
+	var poly := Polygon2D.new()
+	var s := size * 0.5
+	poly.polygon = PackedVector2Array([
+		Vector2(-s, -s), Vector2(s, -s), Vector2(s, s), Vector2(-s, s)
+	])
+	poly.color = color
+	poly.position = pos
+	_path_visuals_root.add_child(poly)
 
 
 func _input(event: InputEvent) -> void:
