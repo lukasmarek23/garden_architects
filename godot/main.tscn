@@ -1,8 +1,144 @@
 [gd_scene format=3 uid="uid://btxv5n542hp68"]
 
 [ext_resource type="Script" uid="uid://bisbqd40kr0t7" path="res://main.gd" id="1_main"]
+[ext_resource type="Texture2D" uid="uid://dpvltwh0urlwi" path="res://art/board3.png" id="2_0xm2m"]
+[ext_resource type="Script" uid="uid://dbujw88yo48f6" path="res://scripts/pawn_marker.gd" id="3_pawn"]
+[ext_resource type="Script" uid="uid://eajxu7hib3av" path="res://scripts/plant_bed_view.gd" id="4_bedview"]
 
 [node name="Main" type="Node2D" unique_id=67007375]
 script = ExtResource("1_main")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1200956823]
+
+[node name="Board3" type="Sprite2D" parent="." unique_id=800413446]
+scale = Vector2(0.6994012, 0.7001953)
+texture = ExtResource("2_0xm2m")
+
+[node name="MoveHighlights" type="Node2D" parent="Board3" unique_id=635499313]
+
+[node name="PawnP1" type="Polygon2D" parent="Board3" unique_id=1640134769]
+z_index = 1
+position = Vector2(-516.27856, 256.71307)
+color = Color(0.85, 0.45, 0.12, 1)
+polygon = PackedVector2Array(22, 0, 20.923244, 6.798374, 17.798374, 12.931275, 12.931275, 17.798374, 6.798374, 20.923244, 1.347067e-15, 22, -6.798374, 20.923244, -12.931275, 17.798374, -17.798374, 12.931275, -20.923244, 6.798374, -22, 2.694134e-15, -20.923244, -6.798374, -17.798374, -12.931275, -12.931275, -17.798374, -6.798374, -20.923244, -4.041201e-15, -22, 6.798374, -20.923244, 12.931275, -17.798374, 17.798374, -12.931275, 20.923244, -6.798374)
+script = ExtResource("3_pawn")
+pawn_color = Color(0.85, 0.45, 0.12, 1)
+
+[node name="PawnP2" type="Polygon2D" parent="Board3" unique_id=547513984]
+z_index = 1
+position = Vector2(507.72144, 249.58217)
+color = Color(0.25, 0.52, 0.95, 1)
+polygon = PackedVector2Array(22, 0, 20.923244, 6.798374, 17.798374, 12.931275, 12.931275, 17.798374, 6.798374, 20.923244, 1.347067e-15, 22, -6.798374, 20.923244, -12.931275, 17.798374, -17.798374, 12.931275, -20.923244, 6.798374, -22, 2.694134e-15, -20.923244, -6.798374, -17.798374, -12.931275, -12.931275, -17.798374, -6.798374, -20.923244, -4.041201e-15, -22, 6.798374, -20.923244, 12.931275, -17.798374, 17.798374, -12.931275, 20.923244, -6.798374)
+script = ExtResource("3_pawn")
+pawn_color = Color(0.25, 0.52, 0.95, 1)
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=722620906]
+
+[node name="TurnLabel" type="Label" parent="CanvasLayer" unique_id=259958224]
+offset_left = 12.0
+offset_top = 12.0
+text = "Player 1"
+
+[node name="EndTurnButton" type="Button" parent="CanvasLayer" unique_id=485541724]
+offset_left = 12.0
+offset_top = 44.0
+text = "End turn"
+
+[node name="ResourcesLabel" type="Label" parent="CanvasLayer" unique_id=1899810237]
+offset_left = 12.0
+offset_top = 80.0
+offset_right = 620.0
+offset_bottom = 200.0
+theme_override_font_sizes/font_size = 15
+autowrap_mode = 3
+
+[node name="P1BedGroup" type="VBoxContainer" parent="CanvasLayer" unique_id=704388728]
+offset_left = 20.0
+offset_top = 190.0
+offset_right = 230.0
+offset_bottom = 385.0
+
+[node name="P1BedLabel" type="Label" parent="CanvasLayer/P1BedGroup" unique_id=805271606]
+layout_mode = 2
+text = "P1 bed"
+
+[node name="PlantBedP1" type="Control" parent="CanvasLayer/P1BedGroup" unique_id=45767107]
+custom_minimum_size = Vector2(210, 168)
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("4_bedview")
+cell_size = 40
+
+[node name="P2BedGroup" type="VBoxContainer" parent="CanvasLayer" unique_id=1447190437]
+offset_left = 1002.0
+offset_top = 190.0
+offset_right = 1212.0
+offset_bottom = 385.0
+
+[node name="P2BedLabel" type="Label" parent="CanvasLayer/P2BedGroup" unique_id=1927494532]
+layout_mode = 2
+text = "P2 bed"
+
+[node name="PlantBedP2" type="Control" parent="CanvasLayer/P2BedGroup" unique_id=905815580]
+custom_minimum_size = Vector2(210, 168)
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("4_bedview")
+cell_size = 40
+
+[node name="BumpLayer" type="CanvasLayer" parent="." unique_id=1703455225]
+layer = 10
+visible = false
+
+[node name="OverlayRoot" type="Control" parent="BumpLayer" unique_id=1036575364]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="BumpLayer/OverlayRoot" unique_id=1657567571]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.72)
+
+[node name="MainLabel" type="Label" parent="BumpLayer/OverlayRoot" unique_id=1144070949]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.5
+anchor_top = 0.4
+anchor_right = 0.5
+anchor_bottom = 0.4
+offset_left = -480.0
+offset_top = -100.0
+offset_right = 480.0
+offset_bottom = 100.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 86
+text = "Rock"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="HintLabel" type="Label" parent="BumpLayer/OverlayRoot" unique_id=951449577]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.5
+anchor_top = 0.56
+anchor_right = 0.5
+anchor_bottom = 0.56
+offset_left = -520.0
+offset_top = -60.0
+offset_right = 520.0
+offset_bottom = 140.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 22
+horizontal_alignment = 1
+autowrap_mode = 3
