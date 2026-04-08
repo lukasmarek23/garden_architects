@@ -6,10 +6,10 @@ extends Node
 ##   Name:  GameState
 
 const CHARACTERS = [
-	{"name": "Gnome",     "color": Color(0.25, 0.45, 0.90, 1.0)},
-	{"name": "Mouse",     "color": Color(0.85, 0.20, 0.20, 1.0)},
-	{"name": "Bee",       "color": Color(0.95, 0.82, 0.10, 1.0)},
-	{"name": "Butterfly", "color": Color(0.70, 0.20, 0.88, 1.0)},
+	{"name": "Gnome",     "color": Color(0.25, 0.45, 0.90, 1.0), "portrait": "res://art/characters/gnome_main.png"},
+	{"name": "Mouse",     "color": Color(0.85, 0.20, 0.20, 1.0), "portrait": "res://art/characters/mouse_main.png"},
+	{"name": "Bee",       "color": Color(0.95, 0.82, 0.10, 1.0), "portrait": "res://art/characters/bee_main.png"},
+	{"name": "Butterfly", "color": Color(0.70, 0.20, 0.88, 1.0), "portrait": "res://art/characters/butterfly_main.png"},
 ]
 
 var p1_character: String = "Gnome"

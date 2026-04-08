@@ -2,6 +2,7 @@ extends Control
 ## Two-phase character selection: P1 picks first, then P2.
 ## Keyboard: Up/Down navigate list · Enter confirms · Escape returns to main menu.
 
+const _MenuTheme = preload("res://scripts/ui_menu_theme.gd")
 const MENU_SCENE := "res://menu.tscn"
 const GAME_SCENE := "res://main.tscn"
 
@@ -11,36 +12,56 @@ var _p1_choice: int = 0
 
 # UI refs built in _ready
 var _title_label: Label
-var _portrait_rect: ColorRect
+var _portrait_bg: ColorRect
+var _portrait_image: TextureRect
 var _portrait_label: Label
 var _list_items: Array[Control] = []
 var _hint_label: Label
 
 
+## Godot 4: code-created Controls need explicit anchor layout_mode + grow or they stay top-left sized.
+## layout_mode 1 = anchors (LAYOUT_MODE_ANCHORS — name varies by engine version).
+func _ui_cover_screen(c: Control) -> void:
+	c.layout_mode = 1
+	c.set_anchors_preset(Control.PRESET_FULL_RECT)
+	c.anchor_right = 1.0
+	c.anchor_bottom = 1.0
+	c.offset_left = 0.0
+	c.offset_top = 0.0
+	c.offset_right = 0.0
+	c.offset_bottom = 0.0
+	c.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	c.grow_vertical = Control.GROW_DIRECTION_BOTH
+
+
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	MenuFlowMusic.ensure_playing()
+	_ui_cover_screen(self)
 
-	# Dark background
-	var bg := ColorRect.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0.07, 0.10, 0.07, 1.0)
-	add_child(bg)
+	var grad := _MenuTheme.make_gradient_background()
+	_ui_cover_screen(grad)
+	grad.z_index = -5
+	add_child(grad)
 
-	# Outer VBox (title + content + hint)
+	_MenuTheme.add_plant_corners(self)
+
+	var cc := CenterContainer.new()
+	_ui_cover_screen(cc)
+	add_child(cc)
+
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", _MenuTheme.style_menu_card())
+	cc.add_child(card)
+
 	var outer := VBoxContainer.new()
-	outer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	outer.custom_minimum_size = Vector2(900, 0)
 	outer.add_theme_constant_override("separation", 24)
-	outer.offset_left   =  60.0
-	outer.offset_right  = -60.0
-	outer.offset_top    =  40.0
-	outer.offset_bottom = -40.0
-	add_child(outer)
+	card.add_child(outer)
 
-	# Title
 	_title_label = Label.new()
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_title_label.add_theme_font_size_override("font_size", 30)
-	_title_label.add_theme_color_override("font_color", Color(0.85, 0.78, 0.45))
+	_MenuTheme.style_subheading_label(_title_label)
+	_title_label.add_theme_font_size_override("font_size", 26)
 	outer.add_child(_title_label)
 
 	# Content row: portrait (left) + list (right)
@@ -56,15 +77,25 @@ func _ready() -> void:
 	portrait_wrap.add_theme_constant_override("separation", 14)
 	hbox.add_child(portrait_wrap)
 
-	_portrait_rect = ColorRect.new()
-	_portrait_rect.custom_minimum_size = Vector2(220, 220)
-	_portrait_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	portrait_wrap.add_child(_portrait_rect)
+	# Coloured background + image layered on top inside a fixed-size container.
+	var portrait_container := Control.new()
+	portrait_container.custom_minimum_size = Vector2(220, 220)
+	portrait_container.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	portrait_wrap.add_child(portrait_container)
+
+	_portrait_bg = ColorRect.new()
+	_portrait_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	portrait_container.add_child(_portrait_bg)
+
+	_portrait_image = TextureRect.new()
+	_portrait_image.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_portrait_image.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	_portrait_image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	portrait_container.add_child(_portrait_image)
 
 	_portrait_label = Label.new()
 	_portrait_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_portrait_label.add_theme_font_size_override("font_size", 24)
-	_portrait_label.add_theme_color_override("font_color", Color(0.92, 0.92, 0.88))
+	_MenuTheme.style_body_label(_portrait_label, 24)
 	portrait_wrap.add_child(_portrait_label)
 
 	# Right — character list
@@ -84,8 +115,8 @@ func _ready() -> void:
 	_hint_label = Label.new()
 	_hint_label.text = "↑ ↓  navigate   ·   Enter  confirm   ·   Escape  back"
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint_label.add_theme_font_size_override("font_size", 16)
-	_hint_label.add_theme_color_override("font_color", Color(0.55, 0.55, 0.50))
+	_MenuTheme.style_body_label(_hint_label, 15)
+	_hint_label.add_theme_color_override("font_color", _MenuTheme.ACCENT_MOSS)
 	outer.add_child(_hint_label)
 
 	_refresh_ui()
@@ -107,8 +138,8 @@ func _make_list_row(char_name: String, char_color: Color) -> PanelContainer:
 
 	var lbl := Label.new()
 	lbl.text = char_name
-	lbl.add_theme_font_size_override("font_size", 20)
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_MenuTheme.style_body_label(lbl, 21)
 	hb.add_child(lbl)
 
 	return panel
@@ -119,7 +150,8 @@ func _refresh_ui() -> void:
 
 	var chars := GameState.CHARACTERS
 	var selected: Dictionary = chars[_cursor]
-	_portrait_rect.color = selected["color"]
+	_portrait_bg.color = selected["color"]
+	_portrait_image.texture = load(selected["portrait"]) as Texture2D
 	_portrait_label.text = selected["name"]
 
 	for i in _list_items.size():
@@ -127,14 +159,18 @@ func _refresh_ui() -> void:
 		var is_cursor   := (i == _cursor)
 		var is_taken    := (_phase == 2 and i == _p1_choice)
 		var style := StyleBoxFlat.new()
+		style.set_corner_radius_all(12)
+		style.set_content_margin_all(10)
+		style.set_border_width_all(2)
 		if is_cursor and not is_taken:
-			style.bg_color = Color(0.25, 0.35, 0.25, 0.95)
-			style.set_border_width_all(2)
-			style.border_color = Color(0.85, 0.78, 0.45)
+			style.bg_color = Color(0.99, 0.95, 0.82, 1.0)
+			style.border_color = _MenuTheme.ACCENT_GOLD
 		elif is_taken:
-			style.bg_color = Color(0.15, 0.15, 0.15, 0.60)
+			style.bg_color = Color(0.78, 0.72, 0.64, 0.45)
+			style.border_color = Color(0.5, 0.45, 0.4, 0.4)
 		else:
-			style.bg_color = Color(0.12, 0.16, 0.12, 0.80)
+			style.bg_color = Color(0.97, 0.93, 0.86, 0.92)
+			style.border_color = _MenuTheme.ACCENT_MOSS
 		panel.add_theme_stylebox_override("panel", style)
 
 		# Grey out the label and swatch of the taken slot

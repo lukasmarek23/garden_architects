@@ -2,6 +2,7 @@ extends Node2D
 
 const CARRY_SEED := 0
 const CARRY_WATER := 1
+const _MenuTheme = preload("res://scripts/ui_menu_theme.gd")
 
 ## Layout convention: prefer placing and parenting nodes in the viewport; use scripts for
 ## rules and animation. `BoardLayout` + `apply_layout_positions_to_pawns` are for grid math
@@ -83,10 +84,12 @@ var _deposited_this_move: bool = false
 var _planting_flow_active: bool = false
 var _pause_layer: CanvasLayer
 var _pause_first_button: Button
+var _pause_btn_quit: Button
 var _paused: bool = false
 
 
 func _ready() -> void:
+	MenuFlowMusic.stop()
 	print("The Garden Architects — Godot project loaded.")
 	# Step 1: calibrate grid math from scene-placed pawns (they sit at A5/G5 in the scene).
 	if derive_grid_from_starting_pawns:
@@ -180,50 +183,72 @@ func _apply_layout_calibration_from_pawns() -> void:
 
 # ── Pause / in-game menu ────────────────────────────────────────────────────
 
+func _pause_ui_full_rect(c: Control) -> void:
+	c.layout_mode = 1
+	c.set_anchors_preset(Control.PRESET_FULL_RECT)
+	c.anchor_right = 1.0
+	c.anchor_bottom = 1.0
+	c.offset_left = 0.0
+	c.offset_top = 0.0
+	c.offset_right = 0.0
+	c.offset_bottom = 0.0
+	c.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	c.grow_vertical = Control.GROW_DIRECTION_BOTH
+
+
 func _build_pause_overlay() -> void:
 	_pause_layer = CanvasLayer.new()
 	_pause_layer.layer = 20
 	_pause_layer.visible = false
-	# All children must keep processing while the tree is paused.
 	_pause_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_pause_layer)
 
-	var dim := ColorRect.new()
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0.0, 0.0, 0.0, 0.62)
-	dim.process_mode = Node.PROCESS_MODE_ALWAYS
-	_pause_layer.add_child(dim)
+	var root := Control.new()
+	_pause_ui_full_rect(root)
+	root.process_mode = Node.PROCESS_MODE_ALWAYS
+	_pause_layer.add_child(root)
 
-	var panel := PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.custom_minimum_size = Vector2(300, 0)
-	panel.process_mode = Node.PROCESS_MODE_ALWAYS
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.07, 0.10, 0.07, 0.97)
-	style.set_corner_radius_all(10)
-	panel.add_theme_stylebox_override("panel", style)
-	_pause_layer.add_child(panel)
+	var dim := ColorRect.new()
+	_pause_ui_full_rect(dim)
+	dim.color = Color(0.0, 0.0, 0.0, 0.55)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.process_mode = Node.PROCESS_MODE_ALWAYS
+	root.add_child(dim)
+
+	var cc := CenterContainer.new()
+	_pause_ui_full_rect(cc)
+	cc.process_mode = Node.PROCESS_MODE_ALWAYS
+	root.add_child(cc)
+
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(340, 0)
+	card.process_mode = Node.PROCESS_MODE_ALWAYS
+	card.add_theme_stylebox_override("panel", _MenuTheme.style_menu_card())
+	cc.add_child(card)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 14)
-	panel.add_child(vbox)
+	vbox.add_theme_constant_override("separation", 18)
+	card.add_child(vbox)
 
 	var title := Label.new()
 	title.text = "Paused"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", Color(0.85, 0.78, 0.45))
+	_MenuTheme.style_subheading_label(title)
+	title.add_theme_font_size_override("font_size", 32)
 	vbox.add_child(title)
 
-	_pause_first_button = _add_pause_button(vbox, "Resume",       func(): _toggle_pause())
-	_add_pause_button(vbox, "Quit to Menu", func(): _quit_to_menu())
+	_pause_first_button = _add_pause_button(vbox, "Resume", func(): _toggle_pause())
+	_pause_btn_quit = _add_pause_button(vbox, "Quit to Menu", func(): _quit_to_menu())
+	_pause_first_button.focus_neighbor_bottom = _pause_first_button.get_path_to(_pause_btn_quit)
+	_pause_btn_quit.focus_neighbor_top = _pause_btn_quit.get_path_to(_pause_first_button)
 
 
 func _add_pause_button(parent: Control, label: String, cb: Callable) -> Button:
 	var btn := Button.new()
 	btn.text = label
-	btn.custom_minimum_size = Vector2(280, 50)
-	btn.add_theme_font_size_override("font_size", 19)
+	btn.custom_minimum_size = Vector2(300, 56)
+	_MenuTheme.style_menu_button(btn)
+	btn.focus_mode = Control.FOCUS_ALL
 	btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	btn.pressed.connect(cb)
 	parent.add_child(btn)

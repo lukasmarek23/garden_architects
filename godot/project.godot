@@ -21,6 +21,7 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 [autoload]
 
 GameState="*uid://kbklc54bhka4"
+MenuFlowMusic="*res://menu_flow_music.gd"
 
 [display]
 
